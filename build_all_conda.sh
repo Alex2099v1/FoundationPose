@@ -9,6 +9,9 @@ make -j$(nproc)
 # Install mycuda
 cd ${PROJ_ROOT}/bundlesdf/mycuda && \
 rm -rf build *egg* *.so && \
-python -m pip install -e .
+python -m pip install -e . --no-build-isolation
+
+# Make mycpp importable
+cp -v ${PROJ_ROOT}/mycpp/build/mycpp*.so ${PROJ_ROOT}/
 
 cd ${PROJ_ROOT}
