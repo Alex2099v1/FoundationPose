@@ -14,6 +14,7 @@ import os
 import sys
 from  geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation as R
+import json 
 
 _THIS_FILE = os.path.realpath(__file__)
 _THIS_DIR  = os.path.dirname(_THIS_FILE)
@@ -170,6 +171,27 @@ class PoseDetectionNode:
             return None 
         rospy.loginfo(f"Using intrinsics K={np.array(self.config['K']).tolist()} for image shape={image.shape[:2]}")
         model_path = self.config['objects'][object_name]
+        model_folder = os.path.dirname(model_path)
+        #look for model_info.json file and load it if exists
+        model_info_path = os.path.join(model_folder, "model_info.json")
+        symmetry_tfs = None
+        if os.path.exists(model_info_path):
+            rospy.loginfo(f"Found model_info.json for '{object_name}', loading symmetries.")
+            with open(model_info_path, 'r') as f:
+                model_info = json.load(f)
+            if "symmetries_discrete" in model_info:
+                symmetry_tfs = np.asarray(model_info["symmetries_discrete"], dtype=np.float32)
+                if symmetry_tfs.ndim != 3 or symmetry_tfs.shape[1:] != (4, 4):
+                    rospy.logwarn(
+                        f"Invalid symmetries_discrete shape {symmetry_tfs.shape}; expected (N,4,4). Ignoring."
+                    )
+                    symmetry_tfs = None
+                else:
+                    identity_tf = np.eye(4, dtype=np.float32)
+                    if symmetry_tfs.shape[0] == 0 or not np.allclose(symmetry_tfs[0], identity_tf, atol=1e-6):
+                        symmetry_tfs = np.concatenate([identity_tf[None], symmetry_tfs], axis=0)
+            else:
+                rospy.loginfo(f"No symmetries_discrete in {model_info_path}; using identity only.")
         mesh = trimesh.load(model_path)
         mask=self.get_sam3_mask_from_image(object_name,image)
         if mask is None:
@@ -182,7 +204,7 @@ class PoseDetectionNode:
         for i in range(mask.shape[0]):
             rospy.loginfo(f"Processing mask {i+1}/{mask.shape[0]} for object '{object_name}'")
             single_mask = mask[i, 0].astype(bool)
-            est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, mesh=mesh, scorer=scorer, refiner=refiner, debug_dir="/home/mrrobot/fpose_debug/", debug=0, glctx=glctx)
+            est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, symmetry_tfs=symmetry_tfs, mesh=mesh, scorer=scorer, refiner=refiner, debug_dir="/home/mrrobot/fpose_debug/", debug=0, glctx=glctx)
             pose = est.register(K=np.array(self.config['K']), rgb=image, depth=depth, ob_mask=single_mask, iteration=self.config['est_refine_iter'])
             poses.append(pose)
             del est

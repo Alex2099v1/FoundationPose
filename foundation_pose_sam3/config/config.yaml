@@ -6,4 +6,4 @@ K : [[610.3609619140625, 0.0, 315.1310119628906],
 on_demand: true
 est_refine_iter : 5
 objects:
-  gray_block:  /home/mrrobot/Theises/external/FoundationPose/gray_block/mesh/GrayBlock.obj
+  gray_block:  /home/mrrobot/Theises/dope_assets/models/gray_block/GrayBlock.obj
