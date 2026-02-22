@@ -1,9 +1,14 @@
-camera_frame: /realsense/optical_frame
+camera_frame: realsense_color_optical_frame
+
 K : [[610.3609619140625, 0.0, 315.1310119628906],
     [0.0, 609.462158203125, 228.9443359375],
     [0.0, 0.0, 1.0]]
+
+rgb_topic: /realsense/color/image_raw
+depth_topic: /realsense/aligned_depth_to_color/image_raw
 
 on_demand: true
 est_refine_iter : 5
 objects:
   gray_block:  /home/mrrobot/Theises/dope_assets/models/gray_block/GrayBlock.obj
+  blue_block:  /home/mrrobot/Theises/dope_assets/models/gray_block/GrayBlock.obj

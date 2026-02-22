@@ -1,6 +1,4 @@
 string object_name
-sensor_msgs/Image rgb_image
-sensor_msgs/Image depth_image
 ---
 geometry_msgs/PoseStamped[] poses
 bool success

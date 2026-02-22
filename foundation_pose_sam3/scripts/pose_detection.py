@@ -15,7 +15,9 @@ import sys
 from  geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation as R
 import json 
-
+from sensor_msgs.msg import Image as  RosImage
+from message_filters import Subscriber, ApproximateTimeSynchronizer
+from threading import Lock
 _THIS_FILE = os.path.realpath(__file__)
 _THIS_DIR  = os.path.dirname(_THIS_FILE)
 
@@ -31,17 +33,28 @@ from datareader import *
 class PoseDetectionNode:
     def __init__(self):
         rospy.init_node('pose_detection_node')
-        
+        self.lock = Lock()
 
         # Load configuration
         config_path = os.path.join(_THIS_DIR, '..', 'config', 'config.yaml')
         with open(config_path, 'r') as f:
             self.config = pyyaml.safe_load(f)
 
-
-
         self.service = rospy.Service('get_object_pose', GetObjectPose, self.handle_get_object_pose)
+        self.latest_rgb = None
+        self.latest_depth = None
+        rgb_subscriber = Subscriber(self.config['rgb_topic'], RosImage)
+        deph_subscriber = Subscriber(self.config['depth_topic'], RosImage)
+        self.ts = ApproximateTimeSynchronizer([rgb_subscriber, deph_subscriber], queue_size=10, slop=0.3)
+        self.ts.registerCallback(self.sync_callback)
+
         rospy.loginfo("Pose Detection Node initialized and ready to receive requests.")
+
+
+    def sync_callback(self, rgb_msg, depth_msg):
+        with self.lock:
+            self.latest_rgb = rgb_msg
+            self.latest_depth = depth_msg
 
     def _ensure_cpu_default_tensors(self):
         # SAM3 prompt encoding calls pin_memory(), which only supports CPU tensors.
@@ -53,17 +66,14 @@ class PoseDetectionNode:
 
     def handle_get_object_pose(self, req):
         # Convert ROS Image to numpy array
+        with self.lock:
+            rgb_msg = self.latest_rgb
+            depth_msg = self.latest_depth
         try:
-            if hasattr(req, "rgb_image") and hasattr(req, "depth_image"):
-                image = rnp.numpify(req.rgb_image)
-                depth = rnp.numpify(req.depth_image)
-                depth_encoding = req.depth_image.encoding
-                rgb_encoding = req.rgb_image.encoding
-            else:
-                image = rnp.numpify(req.image)
-                depth = rnp.numpify(req.depth)
-                depth_encoding = req.depth.encoding
-                rgb_encoding = req.image.encoding
+                image = rnp.numpify(rgb_msg)
+                depth = rnp.numpify(depth_msg)
+                depth_encoding = depth_msg.encoding
+                rgb_encoding = rgb_msg.encoding
         except Exception as e:
             rospy.logerr(f"Error converting ROS Image to numpy array: {e}")
             return GetObjectPoseResponse(success=False, poses=[])
