@@ -16,6 +16,7 @@ from  geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation as R
 import json 
 from sensor_msgs.msg import Image as  RosImage
+from sensor_msgs.msg import CameraInfo
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 from threading import Lock
 _THIS_FILE = os.path.realpath(__file__)
@@ -39,7 +40,8 @@ class PoseDetectionNode:
         config_path = os.path.join(_THIS_DIR, '..', 'config', 'config.yaml')
         with open(config_path, 'r') as f:
             self.config = pyyaml.safe_load(f)
-
+        camera_info=rospy.wait_for_message(self.config['camera_info_topic'], CameraInfo, timeout=10.0)
+        self.K=np.array(camera_info.K).reshape(3,3)
         self.service = rospy.Service('get_object_pose', GetObjectPose, self.handle_get_object_pose)
         self.latest_rgb = None
         self.latest_depth = None
@@ -179,7 +181,7 @@ class PoseDetectionNode:
         if object_name not in self.config['objects']:
             rospy.logwarn(f"Object '{object_name}' not found in configuration.")
             return None 
-        rospy.loginfo(f"Using intrinsics K={np.array(self.config['K']).tolist()} for image shape={image.shape[:2]}")
+        rospy.loginfo(f"Using intrinsics K={self.K.tolist()} for image shape={image.shape[:2]}")
         model_path = self.config['objects'][object_name]
         model_folder = os.path.dirname(model_path)
         #look for model_info.json file and load it if exists
@@ -215,7 +217,7 @@ class PoseDetectionNode:
             rospy.loginfo(f"Processing mask {i+1}/{mask.shape[0]} for object '{object_name}'")
             single_mask = mask[i, 0].astype(bool)
             est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, symmetry_tfs=symmetry_tfs, mesh=mesh, scorer=scorer, refiner=refiner, debug_dir="/home/mrrobot/fpose_debug/", debug=0, glctx=glctx)
-            pose = est.register(K=np.array(self.config['K']), rgb=image, depth=depth, ob_mask=single_mask, iteration=self.config['est_refine_iter'])
+            pose = est.register(K=self.K, rgb=image, depth=depth, ob_mask=single_mask, iteration=self.config['est_refine_iter'])
             poses.append(pose)
             del est
             self.flush_gpu_memory()
