@@ -77,6 +77,9 @@ def _normalize(v, eps=1e-12):
         return v
     return v / n
 
+def _project_to_xy(v):
+    return v - np.dot(v, WORLD_UP) * WORLD_UP
+
 def fix_transform_axis(transform_msg, parallel_thresh=0.9):
     quat = transform_msg.pose.orientation
     r = R.from_quat([quat.x, quat.y, quat.z, quat.w]).as_matrix()
@@ -85,12 +88,21 @@ def fix_transform_axis(transform_msg, parallel_thresh=0.9):
     y = r[:, 1]
     z = r[:, 2]
     
-    x_dot= np.dot(x, WORLD_UP)
-    # If X is already (almost) parallel to world up, don't touch it
-    if abs(x_dot) > parallel_thresh:
-        if x_dot < 0:
-            r[:, 0] *= -1 
-            r[:, 2] *= -1 
+    x_dot = np.dot(x, WORLD_UP)
+
+    if x_dot > parallel_thresh:
+        x_new = WORLD_UP.copy()
+
+        y_proj = _project_to_xy(y)
+        if np.linalg.norm(y_proj) < 1e-8:
+            y_proj = _project_to_xy(z)
+
+        y_new = _normalize(y_proj)
+        z_new = _normalize(np.cross(x_new, y_new))
+        y_new = _normalize(np.cross(z_new, x_new))
+
+        r = np.column_stack((x_new, y_new, z_new))
+
         fixed_quat = R.from_matrix(r).as_quat()
         transform_msg.pose.orientation.x = fixed_quat[0]
         transform_msg.pose.orientation.y = fixed_quat[1]
@@ -98,21 +110,28 @@ def fix_transform_axis(transform_msg, parallel_thresh=0.9):
         transform_msg.pose.orientation.w = fixed_quat[3]
         return transform_msg
 
-    # If Y is (almost) parallel to world up, we want "up" to be Z, so move that axis to Z
     if abs(np.dot(y, WORLD_UP)) > parallel_thresh:
-        # Put old Y into Z, and rebuild Y to keep a proper right-handed basis.
         z_new = _normalize(y)
-        x_new = _normalize(x - np.dot(x, z_new) * z_new)   # make x orthogonal to z_new
-        y_new = np.cross(z_new, x_new)                     # ensures right-handed
-
+        x_new = _normalize(x - np.dot(x, z_new) * z_new)
+        y_new = np.cross(z_new, x_new)
         r = np.column_stack((x_new, y_new, z_new))
 
-    # Enforce Z-up (relative to world_up)
     z = r[:, 2]
     if np.dot(z, WORLD_UP) < 0:
-        # Flip two axes to keep det=+1 (proper rotation)
-        r[:, 0] *= -1  # flip X
-        r[:, 2] *= -1  # flip Z
+        r[:, 0] *= -1
+        r[:, 2] *= -1
+
+    z_new = WORLD_UP.copy()
+
+    x_proj = _project_to_xy(r[:, 0])
+    if np.linalg.norm(x_proj) < 1e-8:
+        x_proj = _project_to_xy(r[:, 1])
+
+    x_new = _normalize(x_proj)
+    y_new = _normalize(np.cross(z_new, x_new))
+    x_new = _normalize(np.cross(y_new, z_new))
+
+    r = np.column_stack((x_new, y_new, z_new))
 
     fixed_quat = R.from_matrix(r).as_quat()
     transform_msg.pose.orientation.x = fixed_quat[0]
