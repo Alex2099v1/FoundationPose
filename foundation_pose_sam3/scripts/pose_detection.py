@@ -18,6 +18,7 @@ import json
 from sensor_msgs.msg import Image as  RosImage
 from sensor_msgs.msg import CameraInfo
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+from scipy.spatial.transform import Rotation as R
 from threading import Lock
 _THIS_FILE = os.path.realpath(__file__)
 _THIS_DIR  = os.path.dirname(_THIS_FILE)
@@ -193,17 +194,13 @@ class PoseDetectionNode:
                 model_info = json.load(f)
             if "symmetries_discrete" in model_info:
                 symmetry_tfs = np.asarray(model_info["symmetries_discrete"], dtype=np.float32)
-                if symmetry_tfs.ndim != 3 or symmetry_tfs.shape[1:] != (4, 4):
-                    rospy.logwarn(
-                        f"Invalid symmetries_discrete shape {symmetry_tfs.shape}; expected (N,4,4). Ignoring."
-                    )
-                    symmetry_tfs = None
-                else:
-                    identity_tf = np.eye(4, dtype=np.float32)
-                    if symmetry_tfs.shape[0] == 0 or not np.allclose(symmetry_tfs[0], identity_tf, atol=1e-6):
-                        symmetry_tfs = np.concatenate([identity_tf[None], symmetry_tfs], axis=0)
-            else:
-                rospy.loginfo(f"No symmetries_discrete in {model_info_path}; using identity only.")
+                angles=[]
+                for transform in symmetry_tfs:
+                    # Get angles from rotation matrices
+                    r = R.from_matrix(transform[:3, :3])
+                    angles.append(r.as_rotvec(degrees=True))
+                rospy.loginfo(f"Using following symetries:  {angles}")
+                    
         mesh = trimesh.load(model_path)
         mask=self.get_sam3_mask_from_image(object_name,image)
         if mask is None:
