@@ -6,10 +6,13 @@ from geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation as R
 import tf
 import numpy as np
+from visualization_msgs.msg import Marker
 def main():
     rospy.init_node('pose_estimator_test_node')
     rospy.wait_for_service('/get_object_pose', timeout=20.0)
     requested_objects=["gray_block","blue_block"]
+    colors={"gray_block":(0.5,0.5,0.5,0.5),"blue_block":(0.0,0.0,1.0,0.5)}
+    marker_pub = rospy.Publisher('/object_markers', Marker, queue_size=10)
     objects_poses={}
     objects_pub = {}
     tf_listener = tf.TransformListener()
@@ -43,6 +46,24 @@ def main():
                 for pose in poses:
                     # transform in table_top frame
                     objects_pub[obj].publish(pose)
+                    # publish marker for each pose
+                    marker = Marker()
+                    marker.header = pose.header
+                    marker.ns = obj
+                    marker.id = poses.index(pose)
+                    marker.type = Marker.CUBE
+                    marker.action = Marker.ADD
+                    marker.pose = pose.pose
+                    marker.scale.x = 0.06
+                    marker.scale.y = 0.02
+                    marker.scale.z = 0.02
+                    r, g, b, a = colors[obj]
+                    marker.color.r = r
+                    marker.color.g = g
+                    marker.color.b = b
+                    marker.color.a = a
+                    marker.lifetime = rospy.Duration(0.0)
+                    marker_pub.publish(marker)
             rete.sleep()
     except rospy.ServiceException as e:
         rospy.logerr(f"Service call failed: {e}")
