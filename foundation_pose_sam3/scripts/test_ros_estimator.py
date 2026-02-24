@@ -10,7 +10,7 @@ from visualization_msgs.msg import Marker
 def main():
     rospy.init_node('pose_estimator_test_node')
     rospy.wait_for_service('/get_object_pose', timeout=20.0)
-    requested_objects=["gray_block","blue_block"]
+    requested_objects=["gray_block"]
     colors={"gray_block":(0.5,0.5,0.5,0.5),"blue_block":(0.0,0.0,1.0,0.5)}
     marker_pub = rospy.Publisher('/object_markers', Marker, queue_size=10)
     objects_poses={}
@@ -84,9 +84,18 @@ def fix_transform_axis(transform_msg, parallel_thresh=0.9):
     x = r[:, 0]
     y = r[:, 1]
     z = r[:, 2]
-
+    
+    x_dot= np.dot(x, WORLD_UP)
     # If X is already (almost) parallel to world up, don't touch it
-    if abs(np.dot(x, WORLD_UP)) > parallel_thresh:
+    if abs(x_dot) > parallel_thresh:
+        if x_dot < 0:
+            r[:, 0] *= -1 
+            r[:, 2] *= -1 
+        fixed_quat = R.from_matrix(r).as_quat()
+        transform_msg.pose.orientation.x = fixed_quat[0]
+        transform_msg.pose.orientation.y = fixed_quat[1]
+        transform_msg.pose.orientation.z = fixed_quat[2]
+        transform_msg.pose.orientation.w = fixed_quat[3]
         return transform_msg
 
     # If Y is (almost) parallel to world up, we want "up" to be Z, so move that axis to Z
