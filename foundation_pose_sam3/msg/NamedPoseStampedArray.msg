@@ -1,0 +1,1 @@
+foundation_pose_sam3/NamedPoseStamped[] poses

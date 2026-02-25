@@ -150,7 +150,7 @@ class PoseDetectionNode:
         try:
             model = build_sam3_image_model()
             model.eval()
-            processor = Sam3Processor(model)
+            processor = Sam3Processor(model,confidence_threshold=0.5)
             pil_image = Image.fromarray(image)
             with torch.inference_mode():
                 inference_state = processor.set_image(pil_image)

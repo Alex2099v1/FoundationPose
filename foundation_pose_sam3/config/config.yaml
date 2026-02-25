@@ -7,4 +7,7 @@ depth_topic: /realsense/aligned_depth_to_color/image_raw
 est_refine_iter : 5
 objects:
   gray_block:  /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
-  blue_block:  /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
+  #blue_block:  /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
+  red_block:   /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
+  green_block: /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
+  
