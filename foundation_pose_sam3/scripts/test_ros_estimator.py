@@ -10,8 +10,8 @@ from visualization_msgs.msg import Marker
 def main():
     rospy.init_node('pose_estimator_test_node')
     rospy.wait_for_service('/get_object_pose', timeout=20.0)
-    requested_objects=["gray_block"]
-    colors={"gray_block":(0.5,0.5,0.5,0.5),"blue_block":(0.0,0.0,1.0,0.5)}
+    requested_objects=["green_block"]
+    colors={"gray_block":(0.5,0.5,0.5,0.5),"blue_block":(0.0,0.0,1.0,0.5),"red_block":(1.0,0.0,0.0,0.5),"green_block":(0.0,1.0,0.0,0.5)}
     marker_pub = rospy.Publisher('/object_markers', Marker, queue_size=10)
     objects_poses={}
     objects_pub = {}
@@ -90,7 +90,7 @@ def fix_transform_axis(transform_msg, parallel_thresh=0.9):
     
     x_dot = np.dot(x, WORLD_UP)
 
-    if x_dot > parallel_thresh:
+    if abs(x_dot) > parallel_thresh:
         x_new = WORLD_UP.copy()
 
         y_proj = _project_to_xy(y)
