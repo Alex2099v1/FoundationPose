@@ -91,8 +91,17 @@ class PoseDetectionNode:
         if poses is None:
             return GetObjectPoseResponse(success=False, poses=[])
         
+        MIN_DISTANCE_M = 0.1  # discard poses closer than 5 cm to the camera
+
         pose_list = []
         for pose in poses:
+            distance = np.linalg.norm(pose[:3, 3])
+            if distance < MIN_DISTANCE_M:
+                rospy.logwarn(
+                    f"Pose discarded: object distance {distance:.4f} m is within "
+                    f"{MIN_DISTANCE_M:.4f} m minimum threshold."
+                )
+                continue
             msg=PoseStamped()
             msg.pose.position.x = pose[0,3]
             msg.pose.position.y = pose[1,3]
