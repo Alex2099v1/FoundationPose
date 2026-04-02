@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import os
+os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 import rospy
 import ros_numpy as rnp
 import numpy as np
@@ -10,15 +12,13 @@ from PIL import Image
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 from foundation_pose_sam3.srv import GetObjectPose, GetObjectPoseResponse
-import os
 import sys
 from  geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation as R
-import json 
+import json
 from sensor_msgs.msg import Image as  RosImage
 from sensor_msgs.msg import CameraInfo
 from message_filters import Subscriber, ApproximateTimeSynchronizer
-from scipy.spatial.transform import Rotation as R
 from threading import Lock
 _THIS_FILE = os.path.realpath(__file__)
 _THIS_DIR  = os.path.dirname(_THIS_FILE)
@@ -43,6 +43,21 @@ class PoseDetectionNode:
             self.config = pyyaml.safe_load(f)
         camera_info=rospy.wait_for_message(self.config['camera_info_topic'], CameraInfo, timeout=10.0)
         self.K=np.array(camera_info.K).reshape(3,3)
+
+        # SAM3 cached in CPU RAM — moved to GPU only during inference, then back to CPU.
+        # This avoids disk loading every call while keeping GPU free for FoundationPose.
+        rospy.loginfo("Loading SAM3 model into CPU RAM...")
+        self.sam3_model = build_sam3_image_model().cpu()
+        self.sam3_model.eval()
+        self.sam3_processor = Sam3Processor(self.sam3_model, confidence_threshold=0.5)
+
+        # FoundationPose components cached once — avoids recreating the CUDA context and
+        # loading scorer/refiner weights on every request.
+        rospy.loginfo("Loading FoundationPose predictors...")
+        self.scorer = ScorePredictor()
+        self.refiner = PoseRefinePredictor()
+        self.glctx = dr.RasterizeCudaContext()
+
         self.service = rospy.Service('get_object_pose', GetObjectPose, self.handle_get_object_pose)
         self.latest_rgb = None
         self.latest_depth = None
@@ -58,14 +73,6 @@ class PoseDetectionNode:
         with self.lock:
             self.latest_rgb = rgb_msg
             self.latest_depth = depth_msg
-
-    def _ensure_cpu_default_tensors(self):
-        # SAM3 prompt encoding calls pin_memory(), which only supports CPU tensors.
-        try:
-            if torch.tensor(0.0).is_cuda:
-                torch.set_default_tensor_type(torch.FloatTensor)
-        except Exception as e:
-            rospy.logwarn(f"Unable to reset default tensor type to CPU: {e}")
 
     def handle_get_object_pose(self, req):
         # Convert ROS Image to numpy array
@@ -150,20 +157,15 @@ class PoseDetectionNode:
     def get_sam3_mask_from_image(self,object_name,image):
         if image is None:
             return None
-        self._ensure_cpu_default_tensors()
-        model = None
-        processor = None
         inference_state = None
         output = None
-        masks_cpu = None
         try:
-            model = build_sam3_image_model()
-            model.eval()
-            processor = Sam3Processor(model,confidence_threshold=0.5)
+            torch.set_default_device('cpu')
+            self.sam3_model.cuda()
             pil_image = Image.fromarray(image)
             with torch.inference_mode():
-                inference_state = processor.set_image(pil_image)
-                output = processor.set_text_prompt(state=inference_state, prompt=object_name)
+                inference_state = self.sam3_processor.set_image(pil_image)
+                output = self.sam3_processor.set_text_prompt(state=inference_state, prompt=object_name)
             masks = output["masks"]
             if masks.shape[0] == 0:
                 rospy.logwarn(f"No masks detected for object '{object_name}'.")
@@ -181,9 +183,10 @@ class PoseDetectionNode:
         finally:
             del output
             del inference_state
-            del processor
-            del model
+            self.sam3_model.cpu()
             self.flush_gpu_memory()
+            if torch.cuda.is_available():
+                torch.set_default_device('cuda')
         
 
 
@@ -216,13 +219,10 @@ class PoseDetectionNode:
             return None
         # in case multiple instances of same object, then multiple foundation pose instances
         poses = []
-        scorer = ScorePredictor()
-        refiner = PoseRefinePredictor()
-        glctx = dr.RasterizeCudaContext()
         for i in range(mask.shape[0]):
             rospy.loginfo(f"Processing mask {i+1}/{mask.shape[0]} for object '{object_name}'")
             single_mask = mask[i, 0].astype(bool)
-            est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, symmetry_tfs=symmetry_tfs, mesh=mesh, scorer=scorer, refiner=refiner, debug_dir="/home/mrrobot/fpose_debug/", debug=0, glctx=glctx)
+            est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, symmetry_tfs=symmetry_tfs, mesh=mesh, scorer=self.scorer, refiner=self.refiner, debug_dir="/home/mrrobot/fpose_debug/", debug=0, glctx=self.glctx)
             pose = est.register(K=self.K, rgb=image, depth=depth, ob_mask=single_mask, iteration=self.config['est_refine_iter'])
             poses.append(pose)
             del est
