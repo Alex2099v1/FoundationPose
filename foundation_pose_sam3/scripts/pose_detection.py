@@ -222,7 +222,7 @@ class PoseDetectionNode:
         for i in range(mask.shape[0]):
             rospy.loginfo(f"Processing mask {i+1}/{mask.shape[0]} for object '{object_name}'")
             single_mask = mask[i, 0].astype(bool)
-            est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, symmetry_tfs=symmetry_tfs, mesh=mesh, scorer=self.scorer, refiner=self.refiner, debug_dir="/home/mrrobot/fpose_debug/", debug=0, glctx=self.glctx)
+            est = FoundationPose(model_pts=mesh.vertices, model_normals=mesh.vertex_normals, symmetry_tfs=symmetry_tfs, mesh=mesh, scorer=self.scorer, refiner=self.refiner, debug_dir="~/fpose_debug/", debug=0, glctx=self.glctx)
             pose = est.register(K=self.K, rgb=image, depth=depth, ob_mask=single_mask, iteration=self.config['est_refine_iter'])
             poses.append(pose)
             del est
