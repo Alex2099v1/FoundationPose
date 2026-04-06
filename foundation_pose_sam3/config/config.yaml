@@ -4,14 +4,14 @@ camera_info_topic: /realsense/color/camera_info
 rgb_topic: /realsense/color/image_raw
 depth_topic: /realsense/aligned_depth_to_color/image_raw
 
-est_refine_iter : 5
+est_refine_iter : 6
 objects:
   gray_block:  /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
-  blue_block:  /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
+  light_blue_block:  /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
   red_block:   /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
   green_block: /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
   dark_purple_block: /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
   brown_block: /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
-
-
-  
+  dark_brown_block: /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
+  dark_red_block:   /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
+  orange_block:   /home/mrrobot/Theises/assets/models/gray_block/GrayBlock.obj
